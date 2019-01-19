@@ -48,6 +48,7 @@ export function angleAndDegreesFromCoordinates(point1, point2) {
 }
 
 export async function TransitLand(endpoint, options) {
+    const TRANSITLAND_BASE_URL = 'https://transit.land/api/v1/';
 
     const key = JSON.stringify({
         endpoint,

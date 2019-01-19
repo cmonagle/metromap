@@ -1,4 +1,12 @@
-const TRANSITLAND_BASE_URL = 'https://transit.land/api/v1/';
+import {
+    TransitLand,
+    getCartesianCoordinates,
+    getCityBbox,
+    distance,
+    angleAndDegreesFromCoordinates,
+    bboxToViewBox
+} from './lib.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const BBOX = [
 //     // Montreal just metro
@@ -32,7 +40,7 @@ function collectStops(polyline, stops, id) {
 
 
 
-async function main() {
+export default async function main() {
     const city = window.location.hash.replace('#', '');
 
     const bbox = await getCityBbox(city);
