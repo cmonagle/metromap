@@ -8,7 +8,7 @@ export async function getCityBbox(city) {
     }
 
     const {south, west, north, east} = JSON.parse(localStorage.getItem(city)).geonames[0].bbox;
-    return [west,south, east,north];
+    return {south, west, east, north};
 }
 
 export function bboxToViewBox(bbox) {
@@ -22,13 +22,12 @@ export function bboxToViewBox(bbox) {
     ]
 };
 
-export function getCartesianCoordinates(point, bbox) {
+export function getCartesianCoordinates(point, offset) {
+    const [x, y] = point.map(adjustForSvg);
     return [
-            point[0] - bbox[0],
-            bbox[3] - point[1]
-        ]
-        .map(n => n * 2000)
-        .map(n => n.toFixed());
+        x - offset.east,
+        y - offset.north
+    ];
 };
 
 export function distance(point1, point2) {
@@ -77,3 +76,30 @@ export async function TransitLand(endpoint, options) {
     localStorage.setItem(key, JSON.stringify(data));
     return data;
 };
+
+export function adjustForSvg(no) {
+    no = no * 2000;
+    no = no.toFixed();
+    return no;
+}
+
+export function getOffset(coordinates) {
+    const offset = coordinates.reduce((extremes, point) => {
+        const {north, south, east, west} = extremes;
+        const [x, y] = point;
+        return {
+            east: Math.min(east, x),
+            north: Math.max(north, y),
+            west: Math.min(west, x),
+            south: Math.max(south, y)
+        }
+    }, {
+        east: 90,
+        north: -90,
+        west: 90,
+        south: -90
+    });
+
+    Object.keys(offset).forEach(key=> offset[key] = adjustForSvg(offset[key]));
+    return offset;
+}

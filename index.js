@@ -1,55 +1,28 @@
 import {
     TransitLand,
-    getCartesianCoordinates,
     getCityBbox,
     distance,
-    angleAndDegreesFromCoordinates,
-    bboxToViewBox
+    getOffset,
+    getCartesianCoordinates,
+    adjustForSvg
 } from './lib.js';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const BBOX = [
-//     // Montreal just metro
-    -73.800000, 45.400000,
-    -73.400000, 45.600000
-//     // Montreal inc suburbs
-//     // -74.200000, 45.300000,
-//     // -73.100000, 45.700000
-];
-
-function collectStops(polyline, stops, id) {
-    const length = polyline.getTotalLength();
-    let routeStops = [];
-
-    for (let i = 0; i < length; i++) {
-        // Loop through all of them at every point inand get them in order
-        const { x,y } = polyline.getPointAtLength(i);
-
-        const stopsOnLine =
-            stops.filter(stop =>
-                distance(stop.coordinates, [x, y]) < 2 // Close to the line
-                && !routeStops.some(stp => stp.name === stop.name) // Not already in the array
-                && stop.routes.find(rteId => rteId === id) //  Stop is serviced by this route
-            );
-
-        routeStops = routeStops.concat([], stopsOnLine);
-    }
-
-    return routeStops;
-};
-
-
+import Line from './line.js';
+import Circle from './circle.js';
 
 export default async function main() {
     const city = window.location.hash.replace('#', '');
 
-    const bbox = await getCityBbox(city);
-    console.info(`${city} bbox`, bbox, BBOX);
-
-    // if window.location.
+    const {north, east, south, west} = await getCityBbox(city);
+    const offset = getOffset(
+        [[west, south]],
+        [east, north]
+    );
+    console.info('City Bbox', offset);
+    
     const routeData = await TransitLand('routes', {
         per_page: 20,
-        bbox: `${bbox}`,
+        bbox: `${[west,south,east,north]}`,
         vehicle_type: '0,1'
     });
     console.info('Route data', routeData);
@@ -57,71 +30,43 @@ export default async function main() {
     const stopData = await TransitLand('stops', {
         served_by: routeData.features.map(ft => ft.id).join(','),
         per_page: 9999,
-        bbox: `${bbox}`
+        bbox: `${[west,south, east,north]}`,
     });
     console.info('Stop data', stopData);
 
-    const stops = stopData.features.reduce((points, point) => {
-        const coords = getCartesianCoordinates(point.geometry.coordinates, bbox);
+    const Stops = stopData.features.reduce((points, point) => {
+        const circle = new Circle(point);
 
         // if it's not way too close to another, add it
-        if (!points.find(({coordinates}) => distance(coordinates, coords) < 5)) {
-            const circle = document.createElementNS(SVG_NS, 'circle');
-            circle.setAttribute('r', '2');
-            circle.setAttribute('cx', coords[0]);
-            circle.setAttribute('cy', coords[1]);
-            points.push({
-                name: point.properties.name,
-                routes: point.properties.routes_serving_stop.map(route => route.route_onestop_id),
-                coordinates: coords,
-                circle
-            });
+        if (
+            !points.find(circle2 => distance(circle.getCartesianCoordinates(offset), circle2.getCartesianCoordinates(offset)) < 1)
+        ) {
+            points.push(circle);
         }
         return points;
-
     }, []);
+    console.info('Stops', Stops);
+    
+    const Lines = routeData.features.map(route => new Line(route));
+    console.info('Lines', Lines);
 
-    const routes = routeData.features.map(route => {
+    const svg = document.querySelector('svg');
+    svg.setAttribute('viewBox', `${[
+        0,
+        0,
+        ...getCartesianCoordinates([offset.east, offset.south].map(adjustForSvg), offset)
+    ]}`)
 
-        // Taking the first one as it appears the two correspond with each direction
-        const mapPoints = route.geometry.coordinates[0].map(points => getCartesianCoordinates(points,bbox));
-
-        const polyline = document.createElementNS(SVG_NS, 'polyline');
-        polyline.setAttribute("points", mapPoints.join(' '));
-        polyline.setAttribute("stroke", `#${route.properties.tags.route_color}`);
-        polyline.setAttribute('name', route.properties.name)
-
-        const id = route.id;
-        const associatedStops = collectStops(polyline, stops, id);
-
-
-        // Now adjust the line to 45 deg angles
-        for (let i = 0; i < associatedStops.length; i++) {
-
-            if (i === associatedStops.length - 1) {
-                continue;
-            }
-
-            let thisStop = associatedStops[i];
-            let nextStop = associatedStops[i + 1];
-            let angle = angleAndDegreesFromCoordinates(thisStop.coordinates, nextStop.coordinates);
-        }
-        return {
-            id,
-            associatedStops,
-            route,
-            mapPoints,
-            polyline
-        };
+    Stops.forEach(Stop => {
+        svg.appendChild(Stop.createNode(offset));
     });
 
+
+    Lines.forEach(Line => {
+        svg.appendChild(Line.createNode(offset));
+    })
+
     // Render
-    const svg = document.querySelector('svg');
-
-    routes.forEach(route => svg.appendChild(route.polyline));
-    stops.forEach(point => svg.appendChild(point.circle));
-    svg.setAttribute('viewBox', `${bboxToViewBox(bbox)}`);
-
 
 }
 
