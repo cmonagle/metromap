@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Map thing</title>
+    <meta charset="utf-8" />
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            overflow: hidden;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.7.0/d3.js" integrity="sha256-qNzZal0keStZ8CLwnu0Fxs+6BGnD5tpk4D1BevFGQDQ=" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+    <svg width="100%" height="100%" viewBox="0 0 1000 800">
+    <path stroke="blue" fill="none" stroke-linecap="round"/>
+    </svg>
+    <script>
+        const BASE_URL = 'https://transit.land/api/v1/';
+        // const AGENCY_ID = 'o-dpz8-ttc';
+        // const AGENCY_ID = 'o-dxfy-halifaxtransit~hrm';
+        // const AGENCY_ID = 'o-f25d-socitdetransportdemontral';
+
+        const WITH_STATIONS = false;
+        const EXCLUDE_AMTRAK = true;
+
+        async function TransitCity(endpoint, props) { 
+
+            const res = await fetch(`
+                ${BASE_URL}
+                ${endpoint}.geojson/?
+                ${Object
+                    .keys(props)
+                    .map(key => `${key}=${props[key]}`)
+                    .join('&')
+                }
+            `.replace(/\s/g,'')); // remove whitespace
+
+            const data = await res.json();
+            return data;
+        };
+
+        async function main() {
+
+            const routeData = await TransitCity('routes', {
+                // operated_by: AGENCY_ID,
+                per_page: 100,
+                bbox: '-73.827031,45.254492,-73.432482,45.815925',
+                vehicle_type: '0,1,2',
+                per_page: 100
+            });
+
+            const routes = {
+                type: 'FeatureCollection',
+                features: []
+            };
+
+            // Now let's query the stop data for each matching route.
+            for (let i in routeData.features) {
+                let route = routeData.features[i];
+
+                if (route.properties.operated_by_onestop_id === 'o-9-amtrak' && EXCLUDE_AMTRAK) {
+                    continue;
+                }
+
+                routes.features.push(route);
+
+                if (WITH_STATIONS) {
+                    const stops = await TransitCity('stops', {
+                        served_by: route.id
+                    });
+
+                    routes.features = routes.features.concat(stops.features);
+                }
+            }
+ 
+            const projection = d3.geoEquirectangular();
+
+            projection.fitExtent([[0, 0], [1000, 800]], routes);
+
+            const geoPath = d3
+                .geoPath()
+                .projection(projection)
+                .pointRadius(4);
+
+            const svg = d3.select('svg');
+            
+            const path = document.querySelector('path');
+            path.setAttribute('d', geoPath(routes));
+            // geoPath(routes));
+            // svg
+            //     .selectAll('path')
+            //     .data(routes)
+            //     .enter()
+            //     .append('path')
+            //     .attr('d', geoPath)
+            //     .attr("fill", "none")
+            //     .attr('stroke', "blue");
+        }
+                        // route.nodes = {
+                //     line: svg.append("path")
+                //         .attr('d', geoPath(route.line))
+                //         .attr('stroke', `#${route.line.properties.color}`)
+                //         .attr('stroke-width', 10)
+                //         .attr('fill', 'none'),
+                //     stations: svg.append("path")
+                //         .attr('d', geoPath(route.stations))
+                //         .attr('stroke', 'white')
+                //         .attr('fill', 'white')
+                // }
+
+                            // const path = document.querySelector('path');
+            // path.setAttribute('d', geoPath(routes));
+            // geoPath(routes));
+            // svg
+            //     .selectAll('path')
+            //     .data(routes)
+            //     .enter()
+            //     .append('path')
+            //     .attr('d', geoPath)
+            //     .attr("fill", "none")
+            //     .attr('stroke', "blue");
+
+
+        main();
+    </script>
+</body>
+
+</html>
