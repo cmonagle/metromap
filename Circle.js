@@ -1,7 +1,7 @@
 /* global document */
 
 import {SVG_NS} from './constants.js';
-import { getCartesianCoordinates } from './lib.js';
+import { getCartesianCoordinates, setAttributes, angleAndDegreesFromCoordinates, round45 } from './lib.js';
 
 export default class Circle {
     constructor(point) {
@@ -11,13 +11,16 @@ export default class Circle {
         this.coordinates = point.geometry.coordinates;
 
         this.Lines = [];
+        this.connections = [];
 
         this.getName = this.getName.bind(this);
         this.createNode = this.createNode.bind(this);
         this.getCoordinates = this.getCoordinates.bind(this);
+        this.setCoordinates = this.setCoordinates.bind(this);
         this.getCartesianCoordinates = this.getCartesianCoordinates.bind(this);
         this.addLine = this.addLine.bind(this);
         this.getPreviousStations = this.getPreviousStations.bind(this);
+        this.createLineNodes = this.createLineNodes.bind(this);
         return this;
     }
 
@@ -33,9 +36,12 @@ export default class Circle {
     getCoordinates() {
         return this.coordinates;
     }
+    setCoordinates(coordinates) {
+        this.coordinates = coordinates;
+    }
 
-    getCartesianCoordinates(offset) {
-        return getCartesianCoordinates(this.coordinates, offset);
+    getCartesianCoordinates(bbox) {
+        return getCartesianCoordinates(this.coordinates, bbox);
     }
 
     getName() {
@@ -53,13 +59,43 @@ export default class Circle {
     getLines() {
         return this.Lines;
     }
-    getPreviousStations() {
-        return this.Lines.reduce((Stops, Line) => {
-            if (Line.prevStop) {
-                Stops.push(Line.prevStop);
-            }
-            return Stops;
-        }, [])
+
+    straightenOut() {
+        const Line = this.getLines()[0];
+        if (Line.prevStop) {
+            const [x, y] = this.getCoordinates();
+            const [x2, y2] = Line.prevStop.getCoordinates();
+
+            const angle = angleAndDegreesFromCoordinates([x, y], [x2, y2]);
+            // const idealAngle = round45(angle);
+    
+            // console.log(angle, idealAngle);
+
+            let xDif = Math.abs(x2 - x);
+            let yDif = Math.abs(y2 - y);
+
+            this.setCoordinates(xDif > yDif ? [x, y2] :[x2, y]);
+        }
 
     }
+
+    createLineNodes(bbox) {
+        const previousStations = this.getPreviousStations();
+        const [x1, y1] = this.getCartesianCoordinates(bbox);
+        return previousStations.map(({Line, prevStop}) => {
+
+            let node = document.createElementNS(SVG_NS, 'line');
+            const [x2, y2] = prevStop.getCartesianCoordinates(bbox);
+            setAttributes({
+                x1, x2, y1, y2,
+                stroke: Line.color,
+                ['stroke-width']: 4
+            }, node);
+            return node;
+        })
+    }
+
+    getPreviousStations() {
+        return this.Lines.filter(Line => !!Line.prevStop);
+    };
 };

@@ -38,6 +38,10 @@ export function distance(point1, point2) {
     return Math.sqrt(a * a + b * b);
 };
 
+export function round45(x) {
+    return Math.ceil(x/45) * 45;
+}
+
 export function angleAndDegreesFromCoordinates(point1, point2) {
     const [x1, y1] = point1;
     const [x2, y2] = point2;
@@ -58,4 +62,10 @@ export function getBboxFromCoordinates(coordinates) {
             Math.max(north, y)
         ]
     }, [90,90, -90, -90]); // @TODO check different hemispheres.
+}
+
+export function setAttributes(attributes, node) {
+    Object.keys(attributes).forEach(key => {
+        node.setAttribute(key, attributes[key]);
+    })
 }
