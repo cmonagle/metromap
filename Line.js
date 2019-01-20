@@ -1,5 +1,5 @@
-import { getCartesianCoordinates, adjustForSvg } from "./lib.js";
-import { SVG_NS } from "./constants.js";
+import { getCartesianCoordinates, getBboxFromCoordinates, distance, bboxToViewBox } from "./lib.js";
+import { SVG_NS, DISTANCE_THRESHOLD } from "./constants.js";
 
 export default class Line {
     constructor(TLRoute) {
@@ -7,6 +7,8 @@ export default class Line {
         this.color = `#${TLRoute.properties.tags.route_color}`;
         this.name = TLRoute.properties.name;
         this.TLRoute = TLRoute;
+
+        this.routeStops = [];
 
         this.getLocalBbox = this.getLocalBbox.bind(this); // just while working
         this.getCartesianCoordinates = this.getCartesianCoordinates.bind(this);
@@ -18,21 +20,21 @@ export default class Line {
     }
 
     getLocalBbox() {
-        const coordinates = this.getCoordinates();
+        return getBboxFromCoordinates(this.getCoordinates());
     }
 
-    getCartesianCoordinates(offset) {
+    getCartesianCoordinates(bbox) {
         return this.getCoordinates()
-            .map(point => getCartesianCoordinates(point, offset));
+            .map(point => getCartesianCoordinates(point, bbox));
     }
 
     getCoordinates() {
         return this.TLRoute.geometry.coordinates[0];
     }
 
-    createNode(offset) {
+    createNode(bbox) {
         const polyline = document.createElementNS(SVG_NS, 'polyline');
-        const routePoints = this.getCartesianCoordinates(offset);
+        const routePoints = this.getCartesianCoordinates(bbox);
         polyline.setAttribute("points", routePoints.join(' '));
         polyline.setAttribute("stroke", this.color);
         polyline.setAttribute('name', this.name)
@@ -45,26 +47,27 @@ export default class Line {
         return node;        
     }
 
-    getStopsOnLine(stops, offset) {
-        const polyLine = createNode(offset)
+    getStopsOnLine(Stops, bbox) {
+        const polyline = this.createNode(bbox);
         const length = polyline.getTotalLength();
-        let routeStops = [];
-    
+
+        let order = 0;
         for (let i = 0; i < length; i++) {
             // Loop through all of them at every point inand get them in order
             const { x,y } = polyline.getPointAtLength(i);
-            
-            const stopsOnLine =
-                stops.filter(stop =>
-                    distance(stop.coordinates, [x, y]) < 2 // Close to the line
-                    && !routeStops.some(stp => stp.name === stop.name) // Not already in the array
-                    && stop.routes.find(rteId => rteId === id) //  Stop is serviced by this route
-                );
-    
-            routeStops = routeStops.concat([], stopsOnLine);
+            const Stop = Stops.find(Stop => 
+                distance(getCartesianCoordinates(Stop.coordinates, bbox), [x, y]) < DISTANCE_THRESHOLD // Close to the line
+                && Stop.routeIds.find(rteId => rteId === this.id) //  Stop is serviced by this route
+                && !this.routeStops.some(stp => stp.name === Stop.name) // Not already in the array
+            );
+            if (Stop) {
+                order++;
+                Stop.addLine(this, order, this.routeStops[this.routeStops.length - 1]);
+                this.routeStops.push(Stop);
+            }
         }
     
-        return routeStops;
+        return this.routeStops;
     
     }
 };
