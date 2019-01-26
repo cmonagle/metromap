@@ -26,21 +26,32 @@ export default class Line {
     }
 
     getCartesianCoordinates(bbox) {
+
         return this.getCoordinates()
-            .map(point => getCartesianCoordinates(point, bbox));
+            .map(segment => segment.map(
+                point => getCartesianCoordinates(point, bbox))
+            );
     }
 
     getCoordinates() {
-        return this.TLRoute.geometry.coordinates[0];
+        return this.TLRoute.geometry.coordinates;
     }
-
     createNode(bbox) {
+        const path =
+            this.getCartesianCoordinates(bbox).map(
+                segment => segment.map(
+                    (point, i) =>  i === 0
+                        ? `M${point[0]},${point[1]}`
+                        : `L${point[0]},${point[1]}`
+                ).join(' ')
+            ).join(' ');
         return setAttributes({
-            points: this.getCartesianCoordinates(bbox).join(' '),
+            d: path,
             stroke: this.color,
             name: this.name,
+            fill: 'none',
             ['stroke-width']: getStrokeSize(bbox)
-        }, document.createElementNS(SVG_NS, 'polyline'));
+        }, document.createElementNS(SVG_NS, 'path'));
     }
 
     addNodeToSvg(svg) {

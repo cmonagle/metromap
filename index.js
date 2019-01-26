@@ -3,7 +3,6 @@ import {
     distance,
     bboxToViewBox,
     getBboxFromCoordinates,
-    getAllPointsFromLines,
     getParamsFromUrl
 } from './lib.js';
 import {

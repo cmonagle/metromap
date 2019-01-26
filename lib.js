@@ -191,13 +191,6 @@ export function SegmentToGrid(segments) {
     return segments;
 }
 
-export function getAllPointsFromLines(Lines) {
-    return Lines.reduce(
-        (points, Line) => [...points, ...Line.getCoordinates()],
-        []
-    );
-}
-
 export function getParamsFromUrl(address) {
     const url = new URL(address);
     return {
