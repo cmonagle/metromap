@@ -1,21 +1,22 @@
-import { getCartesianCoordinates, getBboxFromCoordinates, distance, bboxToViewBox } from "./lib.js";
 import { SVG_NS, DISTANCE_THRESHOLD } from "./constants.js";
-
+import { 
+    getCartesianCoordinates,
+    getBboxFromCoordinates,
+    distance,
+    setAttributes,
+    SimplifyLine
+} from "./lib.js";
 export default class Line {
-    constructor(TLRoute) {
+    constructor(TLRoute, Stops) {
         this.id = TLRoute.id;
-        this.color = `#${TLRoute.properties.tags.route_color}`;
+        this.color = `#${TLRoute.properties.tags.route_color || '000'}`;
         this.name = TLRoute.properties.name;
         this.TLRoute = TLRoute;
-
-        this.routeStops = [];
-
-        this.getLocalBbox = this.getLocalBbox.bind(this); // just while working
-        this.getCartesianCoordinates = this.getCartesianCoordinates.bind(this);
-        this.getCoordinates = this.getCoordinates.bind(this);
-        this.createNode = this.createNode.bind(this);
-        this.addNodeToSvg = this.addNodeToSvg.bind(this);
-        this.getStopsOnLine = this.getStopsOnLine.bind(this);
+        this.Stops = [];
+        if (Stops) {
+            this.getStopsOnLine(Stops);
+        }
+        this.segments = [];
         return this;
     }
 
@@ -33,12 +34,11 @@ export default class Line {
     }
 
     createNode(bbox) {
-        const polyline = document.createElementNS(SVG_NS, 'polyline');
-        const routePoints = this.getCartesianCoordinates(bbox);
-        polyline.setAttribute("points", routePoints.join(' '));
-        polyline.setAttribute("stroke", this.color);
-        polyline.setAttribute('name', this.name)
-        return polyline;
+        return setAttributes({
+            points: this.getCartesianCoordinates(bbox).join(' '),
+            stroke: this.color,
+            name: this.name
+        }, document.createElementNS(SVG_NS, 'polyline'));
     }
 
     addNodeToSvg(svg) {
@@ -47,27 +47,70 @@ export default class Line {
         return node;        
     }
 
-    getStopsOnLine(Stops, bbox) {
+    getSegments() {
+        const Stops = this.Stops;
+        const Segments = Stops
+            .reduce((Segments, Stop) => {
+                const position = this.getStopPos(Stop);
+                if (position === 0 ) {
+                    Segments.push([Stop]);
+                } else if (Stop.getLines().length > 1) {
+                    Segments[Segments.length - 1].push(Stop);
+                    Segments.push([Stop]);
+                } else {
+                    Segments[Segments.length - 1].push(Stop);
+                }
+                return Segments;
+            }, []);
+        this.Segments = Segments;
+        return Segments;   
+    }
+
+    renderSegments(bbox) {
+        return this.Segments.map(Segment => {
+            const points = Segment.map(Stop => Stop.getCartesianCoordinates(bbox));
+
+            return setAttributes({
+                points,
+                stroke: this.color,
+                ['stroke-width']: 1
+            }, document.createElementNS(SVG_NS, 'polyline'));
+        })
+    }
+
+    getStopPos(Stop) {
+        return this.Stops.findIndex(Stop2 => Stop === Stop2);
+    }
+
+    getStopsOnLine(Stops) {
+        if (this.Stops.length) {
+            return this.Stops;
+        }
+
+        const bbox = this.getLocalBbox();
+        // This really should be simplified somehow.
         const polyline = this.createNode(bbox);
         const length = polyline.getTotalLength();
-
-        let order = 0;
         for (let i = 0; i < length; i++) {
+
             // Loop through all of them at every point inand get them in order
             const { x,y } = polyline.getPointAtLength(i);
-            const Stop = Stops.find(Stop => 
-                distance(getCartesianCoordinates(Stop.coordinates, bbox), [x, y]) < DISTANCE_THRESHOLD // Close to the line
-                && Stop.routeIds.find(rteId => rteId === this.id) //  Stop is serviced by this route
-                && !this.routeStops.some(stp => stp.name === Stop.name) // Not already in the array
-            );
-            if (Stop) {
-                order++;
-                Stop.addLine(this, order, this.routeStops[this.routeStops.length - 1]);
-                this.routeStops.push(Stop);
+            if (x, y) {
+                const Stop = Stops.find(Stop => 
+                    // Close to the line
+                    distance(Stop.getCartesianCoordinates(bbox), [x, y]) < DISTANCE_THRESHOLD 
+                    //  Stop is serviced by this route
+                    && Stop.routeIds.find(rteId => rteId === this.id)
+                    // Not already in the array
+                    && !this.Stops.some(Stop2 => Stop2.name === Stop.name)
+                );
+                if (Stop) {
+                    Stop.addLine(this);
+                    this.Stops.push(Stop)
+                }
             }
         }
-    
-        return this.routeStops;
+        return this.Stops;
     
     }
 };

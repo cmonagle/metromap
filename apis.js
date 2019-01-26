@@ -24,8 +24,12 @@ export async function TransitLand(endpoint, options) {
         );
 
     const data = await res.json();
-
-    localStorage.setItem(key, JSON.stringify(data));
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) { // this could be more efficient
+        localStorage.clear();
+        localStorage.setItem(key, JSON.stringify(data));
+    }
     return data;
 };
 
@@ -38,5 +42,5 @@ export async function Geonames(city){
         localStorage.setItem(city, JSON.stringify(data));
         return data;
     }
-    return JSON.parse(localStorage.getItem(city)).geonames[0].bbox;
+    return JSON.parse(localStorage.getItem(city));
 }
