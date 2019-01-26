@@ -1,7 +1,7 @@
 /* global document */
 
 import {SVG_NS} from './constants.js';
-import { getCartesianCoordinates, setAttributes, angleAndDegreesFromCoordinates, round45, getPointOnAngle } from './lib.js';
+import { getCartesianCoordinates, setAttributes, getPointOnAngle, getStrokeSize } from './lib.js';
 
 export default class Circle {
     constructor(point) {
@@ -15,10 +15,10 @@ export default class Circle {
         return this;
     }
 
-    createNode(offset) {
-        const [x, y] = this.getCartesianCoordinates(offset);
+    createNode(bbox) {
+        const [x, y] = this.getCartesianCoordinates(bbox);
         return setAttributes({
-            r: 3,
+            r: getStrokeSize(bbox),
             cx: x,
             cy: y,
             name: this.name,

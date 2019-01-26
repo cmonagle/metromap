@@ -4,7 +4,8 @@ import {
     getBboxFromCoordinates,
     distance,
     setAttributes,
-    SimplifyLine
+    SimplifyLine,
+    getStrokeSize
 } from "./lib.js";
 export default class Line {
     constructor(TLRoute, Stops) {
@@ -37,7 +38,8 @@ export default class Line {
         return setAttributes({
             points: this.getCartesianCoordinates(bbox).join(' '),
             stroke: this.color,
-            name: this.name
+            name: this.name,
+            ['stroke-width']: getStrokeSize(bbox)
         }, document.createElementNS(SVG_NS, 'polyline'));
     }
 

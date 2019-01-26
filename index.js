@@ -84,7 +84,6 @@ export default async function main() {
         })
     }
     loader.classList.add('hidden');
-
 }
 
 main();

@@ -1,10 +1,23 @@
-import { Geonames } from "./apis.js";
-import { PADDING, ACCEPTABLE_ANGLES, DISTANCE_THRESHOLD } from "./constants.js";
+import {
+    Geonames
+} from "./apis.js";
+import {
+    PADDING,
+    ACCEPTABLE_ANGLES,
+    DISTANCE_THRESHOLD
+} from "./constants.js";
 
 export async function getCityBbox(city) {
-    const {geonames} = await Geonames(city);
-    const {south, west, north, east} = geonames[0].bbox; 
-    return [west,south, east,north];
+    const {
+        geonames
+    } = await Geonames(city);
+    const {
+        south,
+        west,
+        north,
+        east
+    } = geonames[0].bbox;
+    return [west, south, east, north];
 }
 
 // 0w 1s 2e 3n
@@ -13,7 +26,7 @@ export function bboxToViewBox(bbox) {
         [bbox[2], bbox[1]],
         bbox
     );
-    
+
     return [
         width * -PADDING,
         height * -PADDING,
@@ -40,7 +53,7 @@ export function distance(point1, point2) {
 };
 
 export function round45(x) {
-    return Math.ceil(x/45) * 45;
+    return Math.ceil(x / 45) * 45;
 }
 
 export function angleAndDegreesFromCoordinates(point1, point2) {
@@ -72,7 +85,7 @@ export function setAttributes(attributes, node) {
     return node;
 }
 
-function movePointAtAngle (point, angle, distance) {
+function movePointAtAngle(point, angle, distance) {
     return [
         point[0] + (Math.sin(angle) * distance),
         point[1] - (Math.cos(angle) * distance)
@@ -80,9 +93,11 @@ function movePointAtAngle (point, angle, distance) {
 }
 
 export function getPointOnAngle(point1, point2) {
-    const dist = Math.max(distance(point1, point2), 0.0075);    
+    const dist = Math.max(distance(point1, point2), 0.0075);
 
-    const {newPoint} = ACCEPTABLE_ANGLES.reduce((acc, angle) => {
+    const {
+        newPoint
+    } = ACCEPTABLE_ANGLES.reduce((acc, angle) => {
         const newPoint = movePointAtAngle(point1, angle, dist);
         const dist2 = distance(newPoint, point2);
         if (dist2 < acc.distance) {
@@ -92,7 +107,10 @@ export function getPointOnAngle(point1, point2) {
             }
         }
         return acc;
-    }, {distance: 1000, newPoint: null});
+    }, {
+        distance: 1000,
+        newPoint: null
+    });
 
     return newPoint;
 }
@@ -104,10 +122,10 @@ export function SimplifyLine(points) {
 
     while (newPoints.length >= idealLength && tries < 400) {
         tries++;
-        for (let i=0; i < newPoints.length && tries < 400; i++) {
-            let point0 = points[i-1];
+        for (let i = 0; i < newPoints.length && tries < 400; i++) {
+            let point0 = points[i - 1];
             let point1 = points[i];
-            let point2 = points[i+1];
+            let point2 = points[i + 1];
 
             if (!point2) {
                 continue;
@@ -121,13 +139,13 @@ export function SimplifyLine(points) {
             } catch (e) {
                 console.trace('here');
             }
-            
+
             if (dist < DISTANCE_THRESHOLD * 50) {
                 point1 = [
                     (point1[0] + point2[0]) / 2,
                     (point1[1] + point2[1]) / 2
                 ];
-                newPoints.splice(i+1, 1);
+                newPoints.splice(i + 1, 1);
             } else {
                 newPoints.splice(i, 1);
             }
@@ -155,8 +173,8 @@ export function SegmentToGrid(segments) {
     // First let's see if any are going from/to the same spots
     const sameDestinations = segments.reduce((sameDestinations, segment) => {
         const dup = segments.filter(segment2 => {
-            (segment2[0] === segment[0] || segment2[0] === segment[segment.length-1])
-            && (segment2[1] === segment[0] || segment2[1] === segment[segment.length-1])
+            (segment2[0] === segment[0] || segment2[0] === segment[segment.length - 1]) &&
+            (segment2[1] === segment[0] || segment2[1] === segment[segment.length - 1])
         });
         if (dup) {
             sameDestinations.push([
@@ -166,15 +184,18 @@ export function SegmentToGrid(segments) {
         }
         return sameDestinations;
     }, []);
-    
-    console.log({sameDestinations});
+
+    console.log({
+        sameDestinations
+    });
     return segments;
 }
 
 export function getAllPointsFromLines(Lines) {
-    return Lines.reduce((points, Line) => {
-        return [...points, ...Line.getCoordinates()]
-    }, []);
+    return Lines.reduce(
+        (points, Line) => [...points, ...Line.getCoordinates()],
+        []
+    );
 }
 
 export function getParamsFromUrl(address) {
@@ -182,6 +203,11 @@ export function getParamsFromUrl(address) {
     return {
         city: url.searchParams.get("city"),
         modes: url.searchParams.getAll("mode"),
-        showStops:  url.searchParams.get("stops") === 'on'
+        showStops: url.searchParams.get("stops") === 'on'
     }
+}
+// 0w 1s 2e 3n
+export function getStrokeSize(bbox) {
+    const [_, __, width, height] = bboxToViewBox(bbox)
+    return Math.min(width / 200, height / 200);
 }
