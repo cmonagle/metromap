@@ -1,42 +1,51 @@
 import {
     getCityBbox,
-    distance,
-    bboxToViewBox,
     getBboxFromCoordinates,
-    getAllPointsFromLines,
-    getParamsFromUrl
+    getSvgCoordinates,
+    getParamsFromUrl,
+    distance
 } from './lib.js';
 import {
     TransitLand
 } from './apis.js';
+import UI from './ui.js';
+import { makeSvg, drawFeatures, updateSvg } from './draw-features.js';
+import { DISTANCE_THRESHOLD } from './constants.js';
 
-import Line from './Line.js';
-import Circle from './Circle.js';
-import {
-    DISTANCE_THRESHOLD, SVG_NS
-} from './constants.js';
+/**
+ * @typedef Stop
+ * @type {object}
+ * @property {Coordinates} coordinates - lat/long coordinates.
+ * @property {Coordinates} svgCoordinates - svg cooridnates
+ * @property {string} name - all names for the stop.
+ * @property {Line[]} linesServiced - lines the stop services.
+ */
+
+ /**
+ * @typedef Line
+ * @type {object}
+ * @property {number[][]} coordinates - lat/long coordinates of each point.
+ * @property {string} name.
+ * @property {string} color - hex code for color
+ * @property {Stop[]} stopsServiced - stops the line services.
+ */
 
 export default async function main() {
     
     const {
         city,
         modes,
-        showStops
-    } = getParamsFromUrl(window.location.href)
+    } = getParamsFromUrl(window.location.href);
 
     if (!city) {
+        UI.setShowForm(true);
         return null;
-    }
+    };
 
-    const loader = document.querySelector('.loader')
-    document.querySelector('form').classList.add('hidden');
-    loader.classList.remove('hidden');
-
+    UI.setLoading(true);
+    UI.setShowForm(false);
     
     const cityBbox = await getCityBbox(city);
-    let bbox = cityBbox;
-    let Stops;
-
     const routeData = await TransitLand('routes', {
         per_page: 100,
         bbox: `${cityBbox}`,
@@ -50,40 +59,148 @@ export default async function main() {
         bbox: `${cityBbox}`,
     });
     console.info('Stop data', stopData);
+    
+    /**
+     * @type {Line}
+     */
+    const lines = routeData.features.map(({geometry, properties}) => {
+        // TransitLand provides each line twice, for each direction.
+        // For now, we're going to ignore the second line and assume it follows
+        // the same route and services the same stops on both directions.
+        const coordinates = geometry.coordinates[0].map(coords => getSvgCoordinates(coords, cityBbox));
 
-    Stops = stopData.features.reduce((points, point) => {
-        const circle = new Circle(point);
-        const coordinates = circle.getCartesianCoordinates(cityBbox);
-        // if it's not way too close to another, add it
-        if (!points.find(p2 =>
-            distance(coordinates, p2.getCartesianCoordinates(cityBbox)) < DISTANCE_THRESHOLD)
-        ) {
-            points.push(circle);
+        return {
+            coordinates,
+            name: properties.name,
+            color: `#${properties.color}`,
+            stopsServiced: properties.stops_served_by_route.map(stopServed => stopServed.stop_name)
+        };
+    })
+
+    /**
+     * @type {Stop[]}
+     */
+    const stops = stopData.features.reduce((stops, {geometry, properties}) => {
+        const svgCoordinates = getSvgCoordinates(geometry.coordinates, cityBbox);
+        const coordinates = geometry.coordinates;
+        // Is this stop a duplicate?
+        const originalStop = stops.filter(p2 =>
+            distance(svgCoordinates, p2.svgCoordinates) < DISTANCE_THRESHOLD
+        );
+        if (originalStop.length) {
+            return stops;
         }
-        return points;
+        stops.push({
+            coordinates,
+            svgCoordinates,
+            name: properties.name
+        });
+
+        return stops;
     }, []);
+    console.info('Transformed stops', stops);
+    const bbox = updateBbox(stops);
+    const svg = makeSvg(bbox);
+    const drawFeatures2 = drawFeatures(bbox, svg);
 
-    const Lines = routeData.features
-        .map(route => new Line(route, Stops));
-    console.info('Lines', Lines);
+    stops.forEach(drawFeatures2.drawStop);
+    UI.setLoading(false);
 
+    let count = 0;
 
-    // Rejig coordinate space to actual content
-    const stopPoints = Stops.map(Stop => Stop.getCoordinates());
-    bbox = getBboxFromCoordinates(stopPoints);
-
-
-    const svg = document.querySelector('svg');
-    svg.setAttribute('viewBox', bboxToViewBox(bbox));
-
-    Lines.forEach(Line => svg.appendChild(Line.createNode(bbox)));
-
-    if (showStops) {
-        Stops.forEach(Stop => {
-            svg.appendChild(Stop.createNode(bbox));
-        })
+    function move() {
+        moveStops(stops, bbox);
+        // const newBbox = updateBbox(stops, svg);
+        // updateSvg(newBbox, svg);
+        stops.forEach(drawFeatures2.updateStop);
+        count++;
+        if (count < 600) {
+            window.requestAnimationFrame(move);
+        }
     }
-    loader.classList.add('hidden');
+
+    window.requestAnimationFrame(move);
 }
 
 main();
+
+function updateBbox(stops) {
+    const stopPoints = stops.map(stop => stop.coordinates);
+    const bbox = getBboxFromCoordinates(stopPoints);
+    stops.forEach(stop => {
+        stop.svgCoordinates = getSvgCoordinates(stop.coordinates, bbox);
+    });
+    return bbox;
+
+}
+/**
+ * 
+ * @param {Stop} stop 
+ * @param {Stop} stop2 
+ */
+function findSpot(stop, stop2) {
+    const [x, y] = stop.svgCoordinates;
+    const [x2, y2] = stop2.svgCoordinates;
+
+    const xDistance = x2 - x;
+    const yDistance = y2 - y;
+    if (xDistance < 0 && xDistance < -10) {
+        stop.svgCoordinates[0] = x - 1
+    } else if (xDistance > 10) {
+        stop.svgCoordinates[0] = x + 1
+    }
+
+    if (yDistance < 0 && yDistance < -10) {
+        stop.svgCoordinates[1] = y + 1;
+    } else if (yDistance > 10) {
+        stop.svgCoordinates[1] = y - 1;
+    }
+}
+/**
+ * 
+ * @param {Stop[]} stop 
+ */
+function moveStops(stops) {
+    stops.forEach(stop => {
+        const closest = stops.reduce((closest, stopToCompare) => {
+            if (stopToCompare.name === stop.name) {
+                return closest;
+            }
+            const thisDistance = distance(stop.svgCoordinates, stopToCompare.svgCoordinates)
+            if (thisDistance < closest.distance && stop.name !== closest.stop.name) {
+                return {
+                    coordinates: stopToCompare.svgCoordinates,
+                    distance: thisDistance,
+                    stop: stopToCompare
+                };
+            }
+            return  closest;
+        }, {coordinates: [], distance: 99999, stop: {}});
+        // console.log(`${stop.name} is closest to ${closest.stop.name}, they are ${distance(closest.coordinates, stop.svgCoordinates)} units apart`);
+        if (distance(closest.coordinates, stop.svgCoordinates) < 20) {
+
+            const [x1, y1] = stop.svgCoordinates;
+            const [x2, y2] = closest.coordinates;
+            let newX, newY;
+            if (x1 < x2 && Math.abs(x1 - x2) < 3) {
+                newX = x1 + 1;
+            } else if (x1 < x2 && Math.abs(x1 - x2) > 3) {
+                newX = x1 - 1;
+            } else {
+                newX = x1;
+            }
+
+            if (y1 < y2 && Math.abs(y1 - y2) < 3) {
+                newY = y1 + 1;
+            } else if  (y1 < y2 && Math.abs(y1 - y2) > 3) {
+                newY = y1 - 1;
+            } else {
+                newY = y1;
+            }
+            stop.svgCoordinates = [
+                newX, newY
+            ]
+        }
+
+    })
+}

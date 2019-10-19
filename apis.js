@@ -26,7 +26,8 @@ export async function TransitLand(endpoint, options) {
     const data = await res.json();
     try {
         localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) { // this could be more efficient
+    } catch (e) {
+        // sometimes we run out of local storage.
         localStorage.clear();
         localStorage.setItem(key, JSON.stringify(data));
     }
