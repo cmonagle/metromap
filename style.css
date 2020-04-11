@@ -1,10 +1,15 @@
+@font-face {
+    font-family: 'League Gothic';
+    src:url('leaguegothic-regular-webfont.woff') format('woff'); /* Legacy iOS */
+  }
+
 html,
 body {
     width: 100%;
     height: 100%;
     margin: 0;
     background-color: #efefef;
-    font-family: sans;
+    font-family: 'League Gothic', sans;
 }
 * {
     box-sizing: border-box;
@@ -54,11 +59,17 @@ header {
 }
 h1 {
     font-size: 200%;
+    font-weight: regular;
 }
 .loader {
     text-align: center;
     text-transform: uppercase;
     font-size: 80%;
+}
+
+text {
+    font-size: 4px;
+    font-family: 'League Gothic', sans;
 }
 /** Credit: https://loading.io/css/ **/
 .lds-ellipsis {

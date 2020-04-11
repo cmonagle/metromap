@@ -17,12 +17,12 @@ export default class Circle {
 
     createNode(bbox) {
         const [x, y] = this.getCartesianCoordinates(bbox);
+        const node = document.createElementNS(SVG_NS, 'text');
+        node.innerHTML = this.name;
         return setAttributes({
-            r: getStrokeSize(bbox),
-            cx: x,
-            cy: y,
-            name: this.name,
-        }, document.createElementNS(SVG_NS, 'circle'));
+            x,
+            y,
+        }, node);
     }
     getCoordinates() {
         return this.coordinates;
